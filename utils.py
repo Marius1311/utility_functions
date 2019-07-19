@@ -16,6 +16,7 @@ import scvelo as scv
 import scanpy as sc
 import pickle
 import traceback
+import warnings
 
 """
 This contains functions for:
@@ -63,8 +64,13 @@ _inter_hist_js_code="""
 
 class Cache():
 
-    def __init__(self, cache_dir):
-        self._cache_dir = Path(cache_dir)
+    def __init__(self, cache_dir, ext='.pickle', make_dir=True):
+        if make_dir and not os.path.exists(cache_dir):
+            os.makedirs(cache_dir)
+
+        self.cache_dir = cache_dir
+        self._ext = ext
+
         setattr(self, 'pca', self.cache(dict(obsm='X_pca',
                                              varm='PCs',
                                              uns=['pca', 'variance_ratio'],
@@ -84,6 +90,83 @@ class Cache():
                 default_fname='diffmap',
                 default_fn=sc.tl.diffmap))
         setattr(self, 'expression', self.cache(dict(X=None), default_fname='expression'))
+        setattr(self, 'pcarr', self._wrap_as_adata(self.cache(dict(obsm='X_pca'),
+                                                                   default_fname='pca_arr',
+                                                                   default_fn=sc.pp.pca),
+                                                   ret_attr=dict(obsm='X_pca')))
+        setattr(self, 'paga', self.cache(dict(uns=['paga', 'connectivities'],
+                                              uns_cache1=['paga','connectivities_tree'],
+                                              uns_cache2=['paga', 'groups'],
+                                              uns_cache3=['paga', 'pos']),
+                                         default_fn=sc.tl.paga,
+                                         default_fname='paga'))
+
+        # this caches also the values for PCA and neighbors
+        setattr(self, 'moments', self.cache(dict(uns='pca',
+                                                 uns_cache1='neighbors',
+                                                 obsm='X_pca',
+                                                 varm='PCs',
+                                                 layers='Ms',
+                                                 layers_cache1='Mu'),
+                                            default_fn=scv.pp.moments,
+                                            default_fname='moments'))
+        setattr(self, 'velocity', self.cache(dict(var='velocity_gamma',
+                                                  var_cache1='velocity_r2',
+                                                  var_cache2='velocity_genes',
+                                                  layers='velocity'),
+                                              default_fn=scv.tl.velocity,
+                                              default_fname='velo'))
+        setattr(self, 'velocity_graph', self.cache(dict(uns=r'.+_graph$',
+                                                        uns_cache1='.+_graph_neg$'),
+                                                   default_fn=scv.tl.velocity_graph,
+                                                   default_fname='velo_graph'))
+        setattr(self, 'draw_graph', self.cache(dict(obsm=re.compile(r'^X_draw_graph_.+$'),
+                                                    uns='draw_graph'),
+                                                    default_fn=sc.tl.draw_graph,
+                                                    default_fname='draw_graph'))
+
+
+    def __repr__(self):
+        return f"{self.__class__.__name__}(dir='{self._cache_dir}', ext='{self._ext}')"
+
+
+    def _wrap_as_adata(self, fn, *, ret_attr):
+
+        def wrapper(*args, **kwargs):
+            if len(args) > 0:
+                adata = args[0] if isinstance(args[0], np.ndarray) else kwargs.get('adata')
+            else:
+                adata = kwargs.get('adata')
+
+            assert isinstance(adata, np.ndarray), f'Expected `{adata}` to be of type `np.ndarray`.'
+            # wrap the np.ndarray in AnnData
+            adata = anndata.AnnData(adata)
+
+            if isinstance(args[0], np.ndarray):
+                # can't assing to tuple
+                args = list(args)
+                args[0] = adata
+                args = tuple(args)
+            else:
+                kwargs['adata'] = adata
+
+            res = fn(*args, **kwargs)
+
+            # if copy was specified, operate on that object
+            # other use the original (inplace modification)
+            res = res if res is not None else adata
+
+            out = []
+            # currently, only 1 key supported
+            for attr, k in ret_attr.items():
+                out.append(getattr(res, attr)[k])
+
+            if len(ret_attr) == 1:
+                return out[0]
+    
+            return tuple(out)
+
+        return wrapper
 
     @property
     def cache_dir(self):
@@ -94,8 +177,10 @@ class Cache():
         if not isinstance(value, Path):
             value = Path(value)
 
-        if not value.is_dir():
-            warning.warn(f'`{value}` is not a directory.')
+        if not value.exists():
+            warnings.warn(f'Path `{value}` does not exist.')
+        elif not value.is_dir():
+            warnings.warn(f'`{value}` is not a directory.')
 
         self._cache_dir = value
 
@@ -107,30 +192,62 @@ class Cache():
                 if keys is None:
                     return obj
 
-                if isinstance(keys, str):
+                if isinstance(keys, str) or not isinstance(keys, Iterable):
                     keys = (keys, )
 
                 for k in keys:
                     obj = obj[k]
+
                 return obj
+
+            def _convert_key(attr, key):
+                if key is None or isinstance(key, str):
+                    return key
+
+                if isinstance(key, re._pattern_type):
+                    return next(filter(key.match, getattr(adata, attr).keys()))
+
+                assert isinstance(key, Iterable)
+
+                # converting to tuple because it's hashable
+                return tuple(key)
 
             try:
 
                 if fname is None:
                     fname = default_fname
 
-                if not fname.endswith('.pkl'):
-                    fname += '.pkl'
+                if not fname.endswith(self._ext):
+                    fname += self._ext
 
-                if (self.cache_dir / fname).is_file() and not recache:
+                if recache:
+                    if verbose:
+                        print(f'Caching data to: `{fname}`.')
+                    data = [((attr, (key, ) if key is None or isinstance(key, str) else key),
+                              _get_val(getattr(adata, attr), key)) for attr, key in map(lambda a_k: (a_k[0], _convert_key(*a_k)), zip(attrs, keys))]
+                    with open(self.cache_dir / fname, 'wb') as fout:
+                        pickle.dump(data, fout)
+
+                    return True
+
+                if (self.cache_dir / fname).is_file():
                     if verbose:
                         print(f'Loading data from: `{fname}`.')
+
                     with open(self.cache_dir / fname, 'rb') as fin:
                         attrs_keys, vals = zip(*pickle.load(fin))
 
                     for (attr, key), val in zip(attrs_keys, vals):
                         if key is None or isinstance(key, str):
                             key = (key, )
+
+                        if not hasattr(adata, attr):
+                            if attr == 'obsm': shape = (adata.n_obs, )
+                            elif attr == 'varm': shape = (adata.n_vars, )
+                            else: raise AttributeError('Support only for `.varm` and `.obsm` attributes.')
+
+                            assert len(keys) == 1, 'Multiple keys not allowed in this case.'
+                            setattr(adata, attr, np.empty(shape))
 
                         if key[0] is not None:
                             at = getattr(adata, attr)
@@ -150,22 +267,16 @@ class Cache():
                                 print(f'Warning: `adata.{attr}` already exists.')
                             setattr(adata, attr, val)
 
-                else:
-                    if verbose:
-                        print(f'Caching data to: `{fname}`.')
-                    data = [((attr, (key, ) if key is None or isinstance(key, str) else tuple(key)),
-                             _get_val(getattr(adata, attr), key)) for attr, key in zip(attrs, keys)]
-                    with open(self.cache_dir / fname, 'wb') as fout:
-                        pickle.dump(data, fout)
+                    return True
 
-                return True
+                return False
 
             except Exception as e:
                 if not isinstance(e, FileNotFoundError):
                     if recache:
                         print(traceback.format_exc())
                 else:
-                    print(f'No cache found; recomputing the values.')
+                    print(f'No cache found in `{self._cache_dir / fname}`.')
                 return False
 
         if len(args) == 1:
@@ -225,7 +336,7 @@ class Cache():
             else:
                 adata = kwargs.get('adata')
 
-            assert isinstance(adata, anndata.AnnData), f'Expected `{adata}` to be of type `anndata.AnnData`, got `{type(adata)}`.'
+            assert isinstance(adata, anndata.AnnData), f'Expected `{adata}` to be of type `anndata.AnnData`.'
 
             if callback is None:
                 callback = (lambda *_x, **_y: None) if default_fn is None else default_fn
@@ -233,15 +344,27 @@ class Cache():
             assert callable(callback), f'`{callblack}` is not callable.'
 
             if force:
+                if verbose:
+                    print('Recomputing values.')
                 res = callback(*args, **kwargs)
                 cache_fn(res if copy else adata, fname, True, verbose=verbose)
                 return res
 
+            # when loading to cache and copy is true, modify the copy
+            if copy:
+                adata = adata.copy()
+
             if not cache_fn(adata, fname, False, verbose):
-                print('Recomputing values.')
+                if verbose:
+                    print('Computing values.')
                 res = callback(*args, **kwargs)
-                cache_fn(res if copy else adata, fname, True, verbose=False)
+                ret = cache_fn(res if copy else adata, fname, True, verbose=False)
+                assert ret, 'Caching failed.'
+
                 return res
+
+            # if cache was found and not modifying inplace
+            return adata if copy else None
 
         cache_fn = self._create_cache_fn(*args, **kwargs)
 
@@ -1506,7 +1629,7 @@ def create_cellxgene_browser(adata, token, jupyter_url='http://localhost:8888', 
     for fname, data in zip([adata_fname, cfg_fname], [ad_data, cfg_data]):
         res.append(session.put(os.path.join(dst_url, urllib.parse.quote(fname)),
                                data=data, params={'token': token}, cookies=cookies))
-        sleep(20)
+        # sleep(1)
 
     return tuple(res) if ret else None
 
