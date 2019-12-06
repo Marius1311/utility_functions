@@ -162,7 +162,7 @@ class Cache():
 
             if len(ret_attr) == 1:
                 return out[0]
-    
+
             return tuple(out)
 
         return wrapper
@@ -393,10 +393,10 @@ def score_cell_cycle(adata, path, gene_symbols = 'none'):
         path - path to a file containing cell cycle genes
         gene_symbols - annotation key from adata.var
     """
-    
+
     # import the gene file
     cc_genes = pd.read_table(path, delimiter='\t')
-    
+
     # sort by s and g2m genes
     s_genes = cc_genes['S'].dropna() # s phase genes
     g2m_genes = cc_genes['G2.M'].dropna()  # g2 phase genes
@@ -412,13 +412,13 @@ def score_cell_cycle(adata, path, gene_symbols = 'none'):
         g2m_genes_mm_ens = adata.var_names[np.in1d(adata.var[gene_symbols], g2m_genes_mm)]
     else:
         s_genes_mm_ens = adata.var_names[np.in1d(adata.var_names, s_genes_mm)]
-        g2m_genes_mm_ens = adata.var_names[np.in1d(adata.var_names, g2m_genes_mm)] 
+        g2m_genes_mm_ens = adata.var_names[np.in1d(adata.var_names, g2m_genes_mm)]
 
     # call the scoring function
     sc.tl.score_genes_cell_cycle(adata, s_genes=s_genes_mm_ens,
                                                 g2m_genes=g2m_genes_mm_ens)
 def check_markers(de_genes, marker_genes):
-    """ 
+    """
     This function compares a set of marker genes obtained from a differential expression test
     to a set of reference marker genes provided by a data base or your local biologist
 
@@ -436,39 +436,39 @@ def check_markers(de_genes, marker_genes):
     """
     # create a dict for the results
     matches = dict()
-    
+
     # loop over clusters
     for group in de_genes.columns:
-        
+
         # add a new entry in the results dict
         matches[group] = dict()
-        
+
         # extract the de genes for that cluster
         de_genes_group = de_genes[group].values
-        
+
         # loop over cell types
         for key in marker_genes:
-            
+
             genes_found = list()
             # loop over the markers for this key
             for gene in marker_genes[key]:
                 regex = re.compile('^' + gene + '$', re.IGNORECASE)
                 result = [l for l in de_genes_group for m in [regex.search(l)] if m]
                 if result: genes_found.append(result[0])
-            
+
             # save the matches in the dict
             if genes_found: matches[group][key] = genes_found
-            
+
     return(matches)
 
 
 def plot_markers(adata, key, markers = None, basis = 'umap', n_max = 10,
                    use_raw = True, multi_line = True, ignore_case = True,
-                   protein= False, min_cutoff = None, max_cutoff = None, clustering = 'louvain', 
+                   protein= False, min_cutoff = None, max_cutoff = None, clustering = 'louvain',
                    colorbar = False, prot_key = 'prot', prot_names_key = 'prot_names', **kwags):
     """
     This function plots a gridspec which visualises marker genes and a clustering in a given embedding.
-    
+
     Parameters
     --------
     adata: AnnData Object
@@ -498,35 +498,35 @@ def plot_markers(adata, key, markers = None, basis = 'umap', n_max = 10,
         Key to the protein names in adata.uns
     **kwags: keywod arguments for plt.scatter
     """
-    
+
     # check wether this basis exists
     if 'X_' + basis not in adata.obsm.keys():
         raise ValueError('You have not computed the basis ' + basis + ' yet. ')
-        
+
     X_em = adata.obsm['X_' + basis]
     if basis == 'diffmap': X_em = X_em[:, 1:]
-    
+
     # give some feedback
     print('Current key: {}'.format(key))
     print('Basis: {}'.format(basis))
-    
+
     # get the gene names
-    if use_raw: 
+    if use_raw:
         try:
             print('Using the rawdata')
             var_names = adata.raw.var_names
-        except: 
+        except:
             var_names = adata.var_names
             use_raw = False
             print('adata.raw does not seem to exist')
-    else: 
+    else:
         var_names = adata.var_names
-        
+
     # obtain the subset of genes we would like to plot
     if markers is not None and protein is False:
-        
+
         if key not in markers.keys():
-            
+
             print('Key not in the markers dict. Searching in the var names.')
             if ignore_case:
                 reg_ex = re.compile(key, re.IGNORECASE)
@@ -534,19 +534,19 @@ def plot_markers(adata, key, markers = None, basis = 'umap', n_max = 10,
                 reg_ex = re.compile(key, re.IGNORECASE)
             genes = [l for l in var_names \
                      for m in [reg_ex.search(l)] if m]
-                
+
         else:
-            
+
             print('Key found in the markers dict.')
             genes_pre = markers[key]
             genes = list()
             not_found = list()
-            
+
             # search through the list of genes
             for gene in genes_pre:
                 if ignore_case:
                     reg_ex = re.compile('^' + gene + '$', re.IGNORECASE)
-                else: 
+                else:
                     reg_ex = re.compile('^' + gene + '$')
                 result = [l for l in var_names \
                           for m in [reg_ex.search(l)] if m]
@@ -556,7 +556,7 @@ def plot_markers(adata, key, markers = None, basis = 'umap', n_max = 10,
                     not_found.append(gene)
             if len(not_found)> 0:
                 print('Could not find the following genes: ' + str(not_found))
-                
+
     elif protein is False:
         print('No markers dict given. Searching in the var names.')
         genes = []
@@ -569,14 +569,14 @@ def plot_markers(adata, key, markers = None, basis = 'umap', n_max = 10,
                      for m in [reg_ex.search(l)] if m]
             genes.append(*genes_)
     elif protein is True:
-        # we will internally refer to the proteins as genes 
+        # we will internally refer to the proteins as genes
         print('Looking for a protein with this name.')
-        
+
         if (prot_names_key not in adata.uns.keys()) or (prot_key not in adata.obsm.keys()):
             raise ValueError('Requires a filed \'{}\' in adata.uns and a field \'{}\' in adata.obsm'.format(prot_names_key, prot_key))
         proteins = adata.obsm[prot_key]
         protein_names = adata.uns[prot_names_key]
-        
+
         # combine to a dataframe
         proteins = pd.DataFrame(data = proteins, columns=protein_names)
         if ignore_case:
@@ -585,40 +585,40 @@ def plot_markers(adata, key, markers = None, basis = 'umap', n_max = 10,
             reg_ex = re.compile(key)
         genes = [l for l in protein_names \
                  for m in [reg_ex.search(l)] if m]
-        
-        
-        
+
+
+
     if len(genes) == 0:
         raise ValueError('Could not find any gene or protein to plot.')
-        
+
     # make sure it is not too many genes
-    if len(genes) > n_max: 
+    if len(genes) > n_max:
         print('Found ' + str(len(genes)) + ' matches.')
         genes = genes[:n_max]
-    if not protein: 
-        print('Plotting the following genes:' + str(genes)) 
+    if not protein:
+        print('Plotting the following genes:' + str(genes))
     else:
-        print('Plotting the following proteins:' + str(genes)) 
-            
+        print('Plotting the following proteins:' + str(genes))
+
     # create a gridspec
     n_genes = len(genes)
-    
+
     if multi_line:
         n_col = 3
         n_row = int(np.ceil(n_genes+1/n_col))
     else:
         n_col = n_genes + 1
         n_row = 1
-        
+
     gs = plt.GridSpec(n_row, n_col, figure = plt.figure(None, (12, n_row*12/(n_col+1) ), dpi = 150))
-    
-    
+
+
     # plot the genes
     plt.title(key)
-    
-    for i in range(n_genes+ 2): 
+
+    for i in range(n_genes+ 2):
         plt.subplot(gs[i])
-        
+
         # genes
         if i < n_genes:
             # get the color vector for this gene
@@ -631,7 +631,7 @@ def plot_markers(adata, key, markers = None, basis = 'umap', n_max = 10,
             else:
                 color = proteins[genes[i]]
                 plt.title('Protein: ' + genes[i])
-                
+
             # quantile normalisation
             if min_cutoff is not None:
                 color_min = np.quantile(color, np.float(min_cutoff[1:])/100)
@@ -642,28 +642,28 @@ def plot_markers(adata, key, markers = None, basis = 'umap', n_max = 10,
             else:
                 color_max = np.max(color)
             color = np.clip(color, color_min, color_max)
-            
+
             plt.scatter(X_em[:, 0], X_em[:, 1], marker = '.', c = color, **kwags)
-            
+
             # add a colorbar
             if colorbar: plt.colorbar()
         elif i == n_genes: #louvain
-            ax = sc.pl.scatter(adata, basis = basis, color = clustering, 
-                               show = False, ax = plt.subplot(gs[i]), 
-                               legend_loc = 'right margin') 
+            ax = sc.pl.scatter(adata, basis = basis, color = clustering,
+                               show = False, ax = plt.subplot(gs[i]),
+                               legend_loc = 'right margin')
         elif i > n_genes: #condition
             if 'color' in adata.obs.keys():
                 print('found key')
-                ax = sc.pl.scatter(adata, basis = basis, color = 'color', 
+                ax = sc.pl.scatter(adata, basis = basis, color = 'color',
                                    show = False, ax = plt.subplot(gs[i]),
-                                   legend_loc = 'right margin') 
+                                   legend_loc = 'right margin')
         plt.axis("off")
     plt.plot()
-    
+
 def map_to_mgi(adata, copy = False):
-    """Utility funciton which maps gene names from ensembl names to mgi names. 
+    """Utility funciton which maps gene names from ensembl names to mgi names.
     Queries the biomart servers for the mapping
-    
+
     Parameters
     --------
     adata: AnnData object
@@ -671,54 +671,54 @@ def map_to_mgi(adata, copy = False):
     from pybiomart import Server
     # connest to the biomart server
     server = Server(host='http://www.ensembl.org')
-    
+
     # retrieve the mouse data set we need
     dataset = (server.marts['ENSEMBL_MART_ENSEMBL']
                  .datasets['mmusculus_gene_ensembl'])
 
     # recieve the mapping from ensembl to MGI
     conv_table = dataset.query(attributes=['ensembl_gene_id', 'external_gene_name'])
-    
+
     # we first drop duplicates in the first column
     conv_table = conv_table.drop_duplicates(conv_table.columns.values[0])
-    
+
     # convert the gene names from the adata object to a data frame
     adata_table = pd.DataFrame(adata.var_names)
-    
+
     # give the first column a name
     adata_table.columns = ['Gene stable ID']
-    
+
     # change the gene table so that the ensembl names are now the index
     conv_table = conv_table.set_index('Gene stable ID')
-    
-    # project the names from the conversion table on the corr. names in the 
+
+    # project the names from the conversion table on the corr. names in the
     # adata var names table
     mapping = adata_table.join(conv_table, on='Gene stable ID')
-    
+
     # how many could we not map
     not_found_mgi = sum(pd.isnull(mapping).iloc[:,1])
 
     # how many ensg symbols did we map several times?
     rep_ensg = len(mapping.iloc[:, 0]) - len(set(mapping.iloc[:, 0]))
-    
+
     # how many mgi symbols did we map several times?
     rep_mgi = len(mapping.iloc[:, 1]) - len(set(mapping.iloc[:, 1]))
-    
+
     # print this information
     print('Genes where no MGI annotations where found: {}\nENSG repetition: {}\nMGI repetition: {}'.\
          format(not_found_mgi, rep_ensg, rep_mgi))
-    
+
     # fill nans in mgi column with corresponding ensembl annotations
     mapping['Gene name'].fillna(mapping['Gene stable ID'], inplace = True)
-    
+
     # add the new gene names to the adata object
     adata.var['mgi_symbols'] = mapping['Gene name'].tolist()
-    
-    
+
+
 def compare_distr(adata, key, groupby = 'batch', **kwags):
     """
     Utility function that lets you compare quality measures among batches.
-    
+
     Parameters:
     --------
     adata : :class: '~anndata.AnnData`
@@ -729,28 +729,28 @@ def compare_distr(adata, key, groupby = 'batch', **kwags):
         Levels used for grouping
     **kwags: dict
         Keyword arguments for plt.hist()
-        
+
     Returns:
     --------
     Nothing but it produces nice plots
     """
-    
+
     plt.figure(None, (8, 6), 70)
     levels = adata.obs[groupby].cat.categories
     for level in levels:
-        plt.hist(adata[adata.obs[groupby] == level].obs[key], alpha = 0.5, 
+        plt.hist(adata[adata.obs[groupby] == level].obs[key], alpha = 0.5,
                      label = level, density = True , **kwags)
     plt.legend()
     plt.title(key)
     plt.show()
-    
-    
+
+
 def print_numbers(adata, groupby=None, return_numbers=False, save_numbers=None):
     """
     Utility function to print cell numbers per batch
-    
+
     Useful when filtering to check at intermediate steps how many cells and genes are left
-    
+
     Parameters:
     --------
     adata : AnnData object
@@ -783,7 +783,7 @@ def print_numbers(adata, groupby=None, return_numbers=False, save_numbers=None):
                 n_cells = adata[adata.obs[groupby] == level].n_obs
                 print('{} cells in {} {}'.format(n_cells, groupby, level))
                 adata_numbers['by_group'][level] = n_cells
-    
+
     # In total
     print('Total: {} cells, {} genes'.\
           format(adata.n_obs, adata.n_vars))
@@ -920,14 +920,14 @@ def create_dir(dir_type, base_path):
 
     return path
 
-    
+
 def corr_ann(adata, obs_keys=['n_counts', 'n_genes'], basis='pca', components=[1, 2]):
     """
     Utility function to correlate continuous annotations against embedding
-    
-    Can be used to see how large the linear influence of a measure like the count depth is on a 
+
+    Can be used to see how large the linear influence of a measure like the count depth is on a
     given component of any embedding, like PCA
-    
+
     Parameters
     --------
     adata : AnnData object
@@ -938,20 +938,20 @@ def corr_ann(adata, obs_keys=['n_counts', 'n_genes'], basis='pca', components=[1
         Key to the basis stored in adata.obsm
     components : `int`, optional (default: `[1, 2]`)
         Component of the embedding to use
-        
-    
+
+
     Returns
     --------
     Nothing, but prints the correlation
     """
-    
+
     # check input
     if 'X_' + basis not in adata.obsm.keys():
         raise ValueError('You have not computed this basis yet')
     for key in obs_keys:
         if key not in adata.obs.keys():
             raise ValueError('The key {!r} does not exist in adata.obs'.format(obs_key))
-        
+
     # get the embedding coordinate
     X_em = adata.obsm['X_' + basis]
 
@@ -972,10 +972,10 @@ def corr_ann(adata, obs_keys=['n_counts', 'n_genes'], basis='pca', components=[1
 def quant_batch(adata, key = 'batch', basis = 'pca', components=[1, 2]):
     """
     Utility funciton to quantify batch effects
-    
-    This is just a very simple approach, kBET by Maren will be much better and more sensitive 
+
+    This is just a very simple approach, kBET by Maren will be much better and more sensitive
     at fulfilling the same task.
-    
+
     Parameters
     --------
     adata : AnnData object
@@ -986,12 +986,12 @@ def quant_batch(adata, key = 'batch', basis = 'pca', components=[1, 2]):
         Basis to compute the silhouette coefficient in. First two components used.
     components : list[str], optional (default: `[1, 2]`)
         Which components to use
-        
+
     Returns
     --------
     Nothing, prints the silhouette coefficient.
     """
-    
+
     from sklearn.metrics import silhouette_score
 
     # check input
@@ -999,17 +999,17 @@ def quant_batch(adata, key = 'batch', basis = 'pca', components=[1, 2]):
         raise ValueError('You have not computd this basis yet')
     if key not in adata.obs.keys():
         raise ValueError('The key \'{}\' does not exist in adata.obs'.format(key))
-        
+
     if not isinstance(components, type(np.array)):
         components = np.array(components)
-    
+
     # get the embedding coordinate
     X_em = adata.obsm['X_' + basis]
     X_em = X_em[:, components - 1]
-    
+
     # get the continious annotation
     ann = adata.obs[key]
-    
+
     # compute silhouette coefficient
     score = silhouette_score(X_em, ann)
     print('Silhouette coefficient in basis \'{}\' for the labels given by \'{}\' is {:.2f}'.format(basis, key, score))
@@ -1019,11 +1019,11 @@ def quant_batch(adata, key = 'batch', basis = 'pca', components=[1, 2]):
 def cluster_distr(adata, cluster_key = 'louvain', batch_key = 'batch', eps = 0.4):
     """
     Utility function to compute how many cells from each batch are in each cluster.
-    
+
     The aim here is to have a very simple procedure to find clusters which are heavily dominated
     by just one batch, which can be an indication that this cluster is not biologically relevant, but just a
     technical artefact.
-    
+
     Parameters
     --------
     adata : AnnData object
@@ -1035,15 +1035,15 @@ def cluster_distr(adata, cluster_key = 'louvain', batch_key = 'batch', eps = 0.4
     eps : float, optional (default: `0.4`)
         Raises a warning if the entropy for any cluster is smaller than this threshold.
         Can be an indicator strong batch effect in that cluster
-        
+
     Returns
     --------
     batch_distr : pd.DataFrame
         Stores total cells numbers per cluster as well as percentages corresponding to batches.
     """
-    
+
     from scipy.stats import entropy
-    
+
     # check the input
     if cluster_key not in adata.obs.keys():
         raise ValueError('The key \'{}\' does not exist in adata.obs'.format(cluster_key))
@@ -1068,21 +1068,21 @@ def cluster_distr(adata, cluster_key = 'louvain', batch_key = 'batch', eps = 0.4
         perc = np.round(np.array(cells_per_cluster_batch) / \
              np.array(cells_per_cluster), 2)
         batch_distr['perc_' + batch] = perc
-    
+
     # compute the entropy
     en  = []
     for cluster in clusters:
         data = batch_distr.loc[cluster][list('perc_' + batches)]
         entropy_cluster = entropy(data)
         en.append(entropy_cluster)
-        
+
         # warn if very small entropy
         if entropy_cluster <= eps:
             print('Warning: Cluster {} has a very uneven batch assignment.'.format(cluster))
     batch_distr['entropy'] = np.round(en, 2)
 
     # ideally the proportion n_batch_0/n_batch_1 will be equal to the proportion across batches
-    # a good quality meassure of clustering will be how much the proportion acrros batches deviates from the proportion 
+    # a good quality meassure of clustering will be how much the proportion acrros batches deviates from the proportion
     # of the whole data set
     b0 = sum(adata.obs[batch_key] == batches[0])
     b1 = sum(adata.obs[batch_key] == batches[1])
@@ -1090,15 +1090,15 @@ def cluster_distr(adata, cluster_key = 'louvain', batch_key = 'batch', eps = 0.4
     prop_cluster = batch_distr['perc_' + batches[0]] / batch_distr['perc_' + batches[1]]
     batch_distr['relative error b0/b1'] = np.round( np.abs(prop_ds - prop_cluster)/prop_ds , 2)
 
-    
-    
+
+
     return batch_distr
 
 
 def de_results(adata, keys = ['names', 'scores'], cluster_key = 'louvain', n_genes = 50):
     """
     Utility function which returns the results of the differential expression test.
-    
+
     Parameters
     --------
     adata: AnnData object
@@ -1109,28 +1109,28 @@ def de_results(adata, keys = ['names', 'scores'], cluster_key = 'louvain', n_gen
         Key from adata.obs where cluster assignment is stored
     n_genes : int, optional (default: `50`)
         Number of genes to include in the table
-        
+
     Returns
     --------
     table : pd.DataFrame
         Contains the results of the differential expressin test
     """
-    
+
     # check input
     if cluster_key not in adata.obs.keys():
         raise ValueError('Could not find the key \'{}\' in adata.obs'.format(cluster_key))
     if 'rank_genes_groups' not in adata.uns.keys():
         raise ValueError('Run the differential expression test first.')
-        
+
     # get the dict
     result = adata.uns['rank_genes_groups']
     group_names = result['names'].dtype.names
-    
+
     # construct a lovely table with a dict comprehension
     table = {group + '_' + key[:10]: \
         result[key][group] for group in group_names for key in keys}
     table = pd.DataFrame(table).head(n_genes)
-    
+
     return table
 
 
@@ -1227,7 +1227,7 @@ def interactive_histograms(adata, keys=['n_counts', 'n_genes'],
     group_v_combs, adatas = _create_adata_groups()
     n_plots = len(group_v_combs)
     checkbox_group = CheckboxGroup(active=list(range(n_plots)), width=200)
-    
+
     for key in keys:
         # create histogram
         cols, legends, callbacks = [], [], []
@@ -1242,7 +1242,7 @@ def interactive_histograms(adata, keys=['n_counts', 'n_genes'],
 
             if ad.n_obs == 0:
                 continue
-            
+
             plot_ids.append(j)
             color = palette[len(plot_ids) - 1]
 
@@ -1404,7 +1404,7 @@ def plot_pcs(adata, pcs=[1, 2], groups=['n_counts', 'n_genes']):
         projections to use
     groups: list, optional (default: `["n_counts"]`)
         keys in adata.obs_keys() or adata.var_name where targets are stored
-    
+
     Returns
     --------
     None
@@ -1415,13 +1415,13 @@ def plot_pcs(adata, pcs=[1, 2], groups=['n_counts', 'n_genes']):
 
     ys = [adata.obs[g] if g in adata.obs_keys() else adata[:, g].X if g in adata.var_names else None
           for g in groups]
-    
+
     ok = tuple(map(lambda y: y is not None, ys))
     if not all(ok):
         raise ValueError(f'Unknown groups: {np.array(groups)[~np.array(ok)]}.')
-        
+
     proj = adata.obsm['X_pca'][:, pcs - 1]
-    
+
     for group, y in zip(groups, ys):
         for i, pc in enumerate(pcs):
             fig = plt.figure()
@@ -1450,7 +1450,7 @@ def plot_r2_scores(adata, components=[1, 2], groups=['n_counts', 'n_genes'],
         basis stored in adata.obsm
     take: int, optional (default: `None`)
         number of highest R\u00B2 scores to plot
-    
+
     Returns
     --------
     None
@@ -1480,40 +1480,40 @@ def plot_r2_scores(adata, components=[1, 2], groups=['n_counts', 'n_genes'],
         groups = np.concatenate([adata.var_names, adata.obs_keys()])
 
     reg = LinearRegression()
-    
+
     proj = adata.obsm['X_' + basis][:, components - 1]
     proj = np.expand_dims(proj, axis=2)  # linreg. requires this
-    
+
     score_groupss = (sorted(((reg.fit(x, y).score(x, y), g)
         for x, y, g in ((proj[:, i], adata[:, g].X if g in adata.var_names else adata.obs[g], g)  # this just sets variable names
             for g in groups)), reverse=True, key=lambda r_g: r_g[0])[:take]
                 for i in range(components.shape[0]))
-    
+
     len_g = len(groups)
     x_ticks = np.arange(0, len_g, max(1, min(10, len_g // 10)))
-    
+
     for component, sgs, in zip(components, score_groupss):
         fig = plt.figure()
         ax = fig.add_subplot(111)
-        
+
         # TODO: better naming
         for ix, (score, group) in enumerate(sgs):
             ax.annotate(f'{group}', xy=(ix, score), xycoords='data',
                         color=cmap[gene_to_group[group]], rotation=90, ha='left', va='bottom')
-            
+
         ax.set_title(f'{basis}_{component}')
         ax.xaxis.set_ticks(x_ticks)
-        
+
         plt.xlabel('rank')
         plt.ylabel('R\u00B2 score')
 
         if not isinstance(cmap, defaultdict):
             plt.legend(handles=[mpatches.Patch(color=color, label=f'{group}') for group, color in cmap.items()])
-        
+
         plt.xlim(-1, len_g)
         plt.ylim(0, 1)
         plt.grid(visible=True)
-        
+
         plt.show()
 
 
@@ -1530,7 +1530,7 @@ def simple_de_matching(adata, markers, n_genes=100):
         dictionary of known marker genes, e.g. for a specific cell type, each with a key
     n_genes: int, optional (default: `10`)
         number of genes to consider
-    
+
     Returns
     --------
     de_genes : pd.DataFrame
@@ -1650,7 +1650,7 @@ def create_cellxgene_browser(adata, token, jupyter_url='http://localhost:8888', 
 
     res = []
     dst_url= os.path.join(jupyter_url, 'api/contents/', urllib.parse.quote(dst_path))
-    
+
     for fname, data in zip([adata_fname, cfg_fname], [ad_data, cfg_data]):
         res.append(session.put(os.path.join(dst_url, urllib.parse.quote(fname)),
                                data=data, params={'token': token}, cookies=cookies))
@@ -1719,3 +1719,134 @@ def plot_gene(adata, ax, x, y, type='gene', x_test=None, x_mean=None, x_cov=None
     ax.set_ylabel('{} expression'.format(type), fontsize=10)
     ax.set_xticks([])
     plt.legend(fontsize=10)
+
+#-----------------------
+#  new home for some former cellrank utility functions
+
+def compute_transitions(W, density_normalize=True):
+    """Compute transition matrix.
+
+    Expects a matrix W which is the adjacency matrix of a cell-to-cell
+    neirest neighbor graph. Copied from scanpy.
+
+    Parameters
+    ----------
+    density_normalize : `bool`
+        The density rescaling of Coifman and Lafon (2006): Then only the
+        geometry of the data matters, not the sampled density.
+    Returns
+    -------
+    T: sparse csr matrix
+        Contains the transition probabilities
+    """
+
+    # density normalization as of Coifman et al. (2005)
+    # ensures that kernel matrix is independent of sampling density
+    if density_normalize:
+        # q[i] is an estimate for the sampling density at point i
+        # it's also the degree of the underlying graph
+
+        print('Computing a density normalisation by using the node degrees.')
+        q = np.asarray(W.sum(axis=1)).flatten()
+        if not issparse(W):
+            Q = np.diag(1.0 / q)
+        else:
+            Q = spdiags(1.0 / q, 0, W.shape[0], W.shape[0])
+        K = Q.dot(W).dot(Q)
+    else:
+        K = W
+
+    # z[i] is the square root of the row sum of K
+    z = np.sqrt(np.asarray(K.sum(axis=1))).flatten()
+    print('Computing a row normalisation')
+    if not issparse(K):
+        Z = np.diag(1.0 / z)
+    else:
+        Z = spdiags(1.0 / z, 0, K.shape[0], K.shape[0])
+
+    # symmetric normalisation
+    T = Z.dot(K).dot(Z)
+
+    return (T)
+
+def compute_conn(D_knn, sigma = None):
+    """
+    Compute connectivities by applying a Gaussian kernel
+
+    Parameters
+    --------
+    D_knn: np.array
+        stores the pairwise distances
+    sigma: int
+        kernel bandwidth
+
+    """
+
+    # create an empty matrix
+    conn = np.zeros(D_knn.shape)
+
+    # extract the neirest neighbors
+    rows, cols = D_knn.nonzero()
+
+    # chose a kernel width
+    if sigma is None:
+        sigma = np.mean(D_knn[rows, cols]) *1.5
+
+    for i in range(len(rows)):
+        r = rows[i]
+        c = cols[i]
+        #print("r = " + str(r) + " \nc = " + str(c) + '\nD_knn[r, c] = ' + str(D_knn[r, c]))
+        conn[r, c] = np.exp(- D_knn[r, c]**2/(2 * sigma**2))
+
+
+    # make this a sparse matrix
+    conn_sparse = csr_matrix(conn)
+
+    return conn_sparse
+    # make the connectivities symmetric
+    M = conn.T - conn
+    if issparse(M):
+        M.data[M.data < 0] = 0
+    else:
+        M = np.where(M > 0, M, 0)
+    conn_sym = conn + M
+
+    # eliminate new zeros
+    if issparse(conn_sym): conn_sym.eliminate_zeros()
+
+    return conn_sym
+
+def sym_conn(conn, remove_neg=False):
+    """Make the connectivities matrix symmetric
+
+    Parameters:
+    --------
+    conn: sparse or dense matrix
+        contains the asymetric connectivities
+
+    Output:
+    --------
+    conn_symm: sparse matrix
+        contains the symmetric connectivities
+    """
+
+    # replace negative values with zeros
+    if remove_neg == True:
+        if issparse(conn):
+            conn.data[conn.data < 0] = 0
+            conn.eliminate_zeros()
+        else:
+            conn = np.where(conn > 0, conn, 0)
+
+    # make the connectivities symmetric
+    M = conn.T - conn
+    if issparse(M):
+        M.data[M.data < 0] = 0
+    else:
+        M = np.where(M > 0, M, 0)
+    conn_sym = conn + M
+
+    # eliminate new zeros
+    if issparse(conn_sym): conn_sym.eliminate_zeros()
+
+    return conn_sym
